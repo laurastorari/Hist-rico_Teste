@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Plano de Voo – Análise Histórica</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3"></script>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #22263a;
+      --border: #2e3250;
+      --accent: #4f8ef7;
+      --accent2: #a78bfa;
+      --green: #34d399;
+      --yellow: #fbbf24;
+      --red: #f87171;
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --radius: 14px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 28px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    header h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    header h1 span {
+      color: var(--accent);
+    }
+
+    #status-badge {
+      font-size: 0.75rem;
+      padding: 4px 12px;
+      border-radius: 999px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+
+    /* KPI CARDS */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .kpi-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      transition: border-color 0.2s;
+    }
+
+    .kpi-card:hover { border-color: var(--accent); }
+
+    .kpi-label {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+
+    .kpi-value {
+      font-size: 2rem;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .kpi-sub {
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    .kpi-card.accent  .kpi-value { color: var(--accent); }
+    .kpi-card.green   .kpi-value { color: var(--green); }
+    .kpi-card.yellow  .kpi-value { color: var(--yellow); }
+    .kpi-card.purple  .kpi-value { color: var(--accent2); }
+
+    /* LAYOUT PRINCIPAL */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 20px;
+      align-items: start;
+    }
+
+    @media (max-width: 900px) {
+      .main-grid { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+    }
+
+    .card-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      margin-bottom: 18px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-title::before {
+      content: '';
+      display: inline-block;
+      width: 3px;
+      height: 14px;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+
+    /* CHART */
+    .chart-wrap {
+      position: relative;
+      height: 380px;
+    }
+
+    /* SIMILAR CARD */
+    .similar-hero {
+      background: linear-gradient(135deg, #1e2a4a, #1a1d27);
+      border: 1px solid var(--accent);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 16px;
+      text-align: center;
+    }
+
+    .similar-hero .month-name {
+      font-size: 1.8rem;
+      font-weight: 800;
+      color: var(--accent);
+    }
+
+    .similar-hero .sim-score {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .similar-hero .sim-bar-wrap {
+      margin-top: 12px;
+      background: var(--surface2);
+      border-radius: 999px;
+      height: 6px;
+      overflow: hidden;
+    }
+
+    .similar-hero .sim-bar {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      border-radius: 999px;
+      transition: width 1s ease;
+    }
+
+    /* RANKING TABLE */
+    .ranking-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+
+    .ranking-table th {
+      text-align: left;
+      color: var(--muted);
+      font-weight: 500;
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .ranking-table td {
+      padding: 8px 8px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+
+    .ranking-table tr:last-child td { border-bottom: none; }
+
+    .ranking-table tr.top-row td { color: var(--accent); font-weight: 600; }
+
+    .rank-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      font-size: 0.7rem;
+      font-weight: 700;
+      background: var(--surface2);
+      color: var(--muted);
+    }
+
+    .rank-badge.gold   { background: #78350f; color: var(--yellow); }
+    .rank-badge.silver { background: #1e293b; color: #94a3b8; }
+    .rank-badge.bronze { background: #1c1917; color: #a16207; }
+
+    .mini-bar-wrap {
+      background: var(--surface2);
+      border-radius: 999px;
+      height: 4px;
+      width: 80px;
+      overflow: hidden;
+      display: inline-block;
+      vertical-align: middle;
+    }
+
+    .mini-bar {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 999px;
+    }
+
+    /* PREVISÃO BOX */
+    .forecast-box {
+      margin-top: 16px;
+      background: var(--surface2);
+      border-radius: var(--radius);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .forecast-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.82rem;
+    }
+
+    .forecast-row .label { color: var(--muted); }
+
+    .forecast-row .val {
+      font-weight: 700;
+      font-size: 0.95rem;
+    }
+
+    .val.green  { color: var(--green); }
+    .val.yellow { color: var(--yellow); }
+    .val.red    { color: var(--red); }
+
+    /* LOADING */
+    #loading {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      z-index: 999;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #error-msg {
+      display: none;
+      background: #2d1515;
+      border: 1px solid var(--red);
+      color: var(--red);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <span>Carregando dados do plano de voo…</span>
+</div>
+
+<div id="error-msg"></div>
+
+<header>
+  <h1>✈️ Plano de <span>Voo</span></h1>
+  <span id="status-badge">Carregando…</span>
+</header>
+
+<!-- KPI CARDS -->
+<div class="kpi-grid">
+  <div class="kpi-card accent">
+    <span class="kpi-label">Vendas acumuladas</span>
+    <span class="kpi-value" id="kpi-acumulado">–</span>
+    <span class="kpi-sub" id="kpi-acumulado-sub">até hoje</span>
+  </div>
+  <div class="kpi-card green">
+    <span class="kpi-label">% da meta</span>
+    <span class="kpi-value" id="kpi-pct">–</span>
+    <span class="kpi-sub" id="kpi-pct-sub">meta: –</span>
+  </div>
+  <div class="kpi-card yellow">
+    <span class="kpi-label">Previsão de fechamento</span>
+    <span class="kpi-value" id="kpi-forecast">–</span>
+    <span class="kpi-sub" id="kpi-forecast-sub">baseado nos meses similares</span>
+  </div>
+  <div class="kpi-card purple">
+    <span class="kpi-label">Mês mais similar</span>
+    <span class="kpi-value" id="kpi-similar">–</span>
+    <span class="kpi-sub" id="kpi-similar-sub">similaridade: –</span>
+  </div>
+</div>
+
+<!-- MAIN GRID -->
+<div class="main-grid">
+
+  <!-- GRÁFICO -->
+  <div class="card">
+    <div class="card-title">Histórico de vendas por mês</div>
+    <div class="chart-wrap">
+      <canvas id="mainChart"></canvas>
+    </div>
+  </div>
+
+  <!-- PAINEL DIREITO -->
+  <div style="display:flex;flex-direction:column;gap:16px;">
+
+    <!-- MESES SIMILARES -->
+    <div class="card">
+      <div class="card-title">Mês mais similar</div>
+      <div class="similar-hero">
+        <div class="month-name" id="sim-month-name">–</div>
+        <div class="sim-score" id="sim-score-label">calculando…</div>
+        <div class="sim-bar-wrap">
+          <div class="sim-bar" id="sim-bar" style="width:0%"></div>
+        </div>
+      </div>
+
+      <table class="ranking-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Mês</th>
+            <th>Fechamento</th>
+            <th>Sim.</th>
+          </tr>
+        </thead>
+        <tbody id="ranking-body"></tbody>
+      </table>
+    </div>
+
+    <!-- PREVISÃO -->
+    <div class="card">
+      <div class="card-title">Previsão de fechamento</div>
+      <div class="forecast-box">
+        <div class="forecast-row">
+          <span class="label">Cenário otimista</span>
+          <span class="val green" id="fc-otimista">–</span>
+        </div>
+        <div class="forecast-row">
+          <span class="label">Cenário base</span>
+          <span class="val yellow" id="fc-base">–</span>
+        </div>
+        <div class="forecast-row">
+          <span class="label">Cenário pessimista</span>
+          <span class="val red" id="fc-pessimista">–</span>
+        </div>
+        <div class="forecast-row" style="border-top:1px solid var(--border);padding-top:10px;margin-top:4px;">
+          <span class="label">Meta mensal</span>
+          <span class="val" id="fc-meta">–</span>
+        </div>
+        <div class="forecast-row">
+          <span class="label">Dias restantes</span>
+          <span class="val" id="fc-dias">–</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+// ⚙️  CONFIGURAÇÃO — altere apenas esta URL
+// ─────────────────────────────────────────────
+const JSON_URL = 'https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPO/main/plano-de-voo.json';
+
+// ─────────────────────────────────────────────
+// CORES
+// ─────────────────────────────────────────────
+const COR_HISTORICO   = 'rgba(100,116,139,0.25)';
+const COR_ATUAL       = '#4f8ef7';
+const COR_PREVISAO    = '#fbbf24';
+const COR_CONE_MAX    = 'rgba(52,211,153,0.15)';
+const COR_CONE_MIN    = 'rgba(248,113,113,0.15)';
+const CORES_SIMILARES = ['#a78bfa','#34d399','#fb923c'];
+const TOP_N           = 3;
+
+// ─────────────────────────────────────────────
+// UTILITÁRIOS
+// ─────────────────────────────────────────────
+function euclidiana(a, b) {
+  const n = Math.min(a.length, b.length);
+  let soma = 0;
+  for (let i = 0; i < n; i++) soma += Math.pow(a[i] - b[i], 2);
+  return Math.sqrt(soma / n);
+}
+
+function normalizar(dados, meta) {
+  return dados.map(v => (v / meta) * 100);
+}
+
+function similaridadePct(dist, maxDist) {
+  return Math.max(0, Math.round((1 - dist / maxDist) * 100));
+}
+
+function previsaoPonderada(mesesSim, diaAtual, totalDias) {
+  const top = mesesSim.slice(0, TOP_N);
+  const previsao = [];
+  for (let d = diaAtual; d < totalDias; d++) {
+    let soma = 0, pesoTotal = 0;
+    top.forEach((m, i) => {
+      const peso = TOP_N - i;
+      if (m.dados[d] !== undefined) {
+        soma += m.dados[d] * peso;
+        pesoTotal += peso;
+      }
+    });
+    previsao.push(pesoTotal > 0 ? Math.round(soma / pesoTotal) : null);
+  }
+  return previsao;
+}
+
+function cor(valor, meta) {
+  const pct = valor / meta;
+  if (pct >= 1)   return 'green';
+  if (pct >= 0.8) return 'yellow';
+  return 'red';
+}
+
+// ─────────────────────────────────────────────
+// MAIN
+// ─────────────────────────────────────────────
+async function init() {
+  try {
+    const res = await fetch(JSON_URL);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    render(data);
+  } catch (e) {
+    document.getElementById('loading').style.display = 'none';
+    const err = document.getElementById('error-msg');
+    err.style.display = 'block';
+    err.textContent = `❌ Erro ao carregar dados: ${e.message}. Verifique a URL do JSON e se o CORS está habilitado (use raw.githubusercontent.com).`;
+  }
+}
+
+function render(data) {
+  const { meta_mensal, historico, mes_atual } = data;
+  const diaAtual   = mes_atual.dados.length;          // quantos dias temos
+  const totalDias  = Math.max(...historico.map(m => m.dados.length));
+  const diasRestantes = totalDias - diaAtual;
+
+  // Normaliza para comparação
+  const atualNorm = normalizar(mes_atual.dados, meta_mensal);
+  const histNorm  = historico.map(m => ({
+    ...m,
+    norm: normalizar(m.dados, meta_mensal)
+  }));
+
+  // Calcula similaridade
+  const comDist = histNorm.map(m => ({
+    ...m,
+    dist: euclidiana(atualNorm, m.norm.slice(0, diaAtual))
+  })).sort((a, b) => a.dist - b.dist);
+
+  const maxDist = Math.max(...comDist.map(m => m.dist));
+  const ranked  = comDist.map(m => ({
+    ...m,
+    simPct: similaridadePct(m.dist, maxDist)
+  }));
+
+  const top3 = ranked.slice(0, TOP_N);
+  const melhor = ranked[0];
+
+  // Previsão
+  const prevBase      = previsaoPonderada(ranked, diaAtual, totalDias);
+  const prevOtimista  = previsaoPonderada(ranked.slice(0,1), diaAtual, totalDias);
+  const prevPessimista= previsaoPonderada(ranked.slice(-3), diaAtual, totalDias);
+
+  const acumuladoAtual = mes_atual.dados[diaAtual - 1] || 0;
+  const fechamentoBase = prevBase[prevBase.length - 1] || acumuladoAtual;
+  const fechamentoOtim = prevOtimista[prevOtimista.length - 1] || acumuladoAtual;
+  const fechamentoPess = prevPessimista[prevPessimista.length - 1] || acumuladoAtual;
+
+  // ── KPI Cards ──
+  document.getElementById('kpi-acumulado').textContent = acumuladoAtual.toLocaleString('pt-BR');
+  document.getElementById('kpi-acumulado-sub').textContent = `dia ${diaAtual} de ${totalDias}`;
+  document.getElementById('kpi-pct').textContent = `${Math.round(acumuladoAtual / meta_mensal * 100)}%`;
+  document.getElementById('kpi-pct-sub').textContent = `meta: ${meta_mensal.toLocaleString('pt-BR')}`;
+  document.getElementById('kpi-forecast').textContent = fechamentoBase.toLocaleString('pt-BR');
+  document.getElementById('kpi-forecast-sub').textContent = `${Math.round(fechamentoBase / meta_mensal * 100)}% da meta`;
+  document.getElementById('kpi-similar').textContent = melhor.label;
+  document.getElementById('kpi-similar-sub').textContent = `similaridade: ${melhor.simPct}%`;
+
+  // ── Status badge ──
+  document.getElementById('status-badge').textContent =
+    `Atualizado • dia ${diaAtual}/${totalDias} • ${mes_atual.label}`;
+
+  // ── Similar hero ──
+  document.getElementById('sim-month-name').textContent = melhor.label;
+  document.getElementById('sim-score-label').textContent = `${melhor.simPct}% de similaridade com o mês atual`;
+  setTimeout(() => {
+    document.getElementById('sim-bar').style.width = `${melhor.simPct}%`;
+  }, 300);
+
+  // ── Ranking table ──
+  const tbody = document.getElementById('ranking-body');
+  const badgeClass = ['gold','silver','bronze'];
+  ranked.slice(0, 8).forEach((m, i) => {
+    const tr = document.createElement('tr');
+    if (i < TOP_N) tr.classList.add('top-row');
+    const pct = Math.round(m.simPct);
+    tr.innerHTML = `
+      <td><span class="rank-badge ${badgeClass[i] || ''}">${i+1}</span></td>
+      <td>${m.label}</td>
+      <td>${(m.dados[m.dados.length-1] || 0).toLocaleString('pt-BR')}</td>
+      <td>
+        <div class="mini-bar-wrap">
+          <div class="mini-bar" style="width:${pct}%"></div>
+        </div>
+        <span style="margin-left:6px;font-size:0.75rem;color:var(--muted)">${pct}%</span>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+
+  // ── Forecast box ──
+  const fmtVal = v => `${v.toLocaleString('pt-BR')} (${Math.round(v/meta_mensal*100)}%)`;
+  document.getElementById('fc-otimista').textContent   = fmtVal(fechamentoOtim);
+  document.getElementById('fc-base').textContent       = fmtVal(fechamentoBase);
+  document.getElementById('fc-pessimista').textContent = fmtVal(fechamentoPess);
+  document.getElementById('fc-meta').textContent       = meta_mensal.toLocaleString('pt-BR');
+  document.getElementById('fc-dias').textContent       = `${diasRestantes} dias`;
+
+  // Aplica cor ao KPI de previsão
+  const kpiForecast = document.querySelector('.kpi-card.yellow .kpi-value');
+  kpiForecast.style.color = `var(--${cor(fechamentoBase, meta_mensal)})`;
+
+  // ── GRÁFICO ──
+  buildChart({ historico, mes_atual, top3, ranked, diaAtual, totalDias,
+               prevBase, prevOtimista, prevPessimista, meta_mensal });
+
+  // Esconde loading
+  document.getElementById('loading').style.display = 'none';
+}
+
+function buildChart({ historico, mes_atual, top3, ranked, diaAtual,
+                      totalDias, prevBase, prevOtimista, prevPessimista, meta_mensal }) {
+
+  const labels = Array.from({ length: totalDias }, (_, i) => `Dia ${i + 1}`);
+
+  const datasets = [];
+
+  // 1. Histórico (cinza claro)
+  historico.forEach(m => {
+    const isTop = top3.some(t => t.mes === m.mes);
+    if (!isTop) {
+      datasets.push({
+        label: m.label,
+        data: m.dados,
+        borderColor: COR_HISTORICO,
+        borderWidth: 1,
+        pointRadius: 0,
+        tension: 0.4,
+        fill: false,
+        order: 10
+      });
+    }
+  });
+
+  // 2. Top 3 similares
+  top3.forEach((m, i) => {
+    datasets.push({
+      label: `${m.label} (${m.simPct}% sim.)`,
+      data: m.dados,
+      borderColor: CORES_SIMILARES[i],
+      borderWidth: 2,
+      pointRadius: 0,
+      tension: 0.4,
+      fill: false,
+      borderDash: [6, 3],
+      order: 5
+    });
+  });
+
+  // 3. Cone otimista (área)
+  const coneOtim = [
+    ...mes_atual.dados,
+    ...prevOtimista.filter(v => v !== null)
+  ];
+  datasets.push({
+    label: 'Cenário otimista',
+    data: coneOtim,
+    borderColor: 'transparent',
+    backgroundColor: COR_CONE_MAX,
+    fill: '+1',
+    pointRadius: 0,
+    tension: 0.4,
+    order: 8
+  });
+
+  // 4. Cone pessimista (área)
+  const conePess = [
+    ...mes_atual.dados,
+    ...prevPessimista.filter(v => v !== null)
+  ];
+  datasets.push({
+    label: 'Cenário pessimista',
+    data: conePess,
+    borderColor: 'transparent',
+    backgroundColor: COR_CONE_MIN,
+    fill: false,
+    pointRadius: 0,
+    tension: 0.4,
+    order: 8
+  });
+
+  // 5. Previsão base (tracejada amarela)
+  const baseCompleto = [
+    ...Array(diaAtual - 1).fill(null),
+    mes_atual.dados[diaAtual - 1],
+    ...prevBase.filter(v => v !== null)
+  ];
+  datasets.push({
+    label: 'Previsão base',
+    data: baseCompleto,
+    borderColor: COR_PREVISAO,
+    borderWidth: 2.5,
+    borderDash: [8, 4],
+    pointRadius: 0,
+    tension: 0.4,
+    fill: false,
+    order: 3
+  });
+
+  // 6. Mês atual (azul sólido)
+  const atualPadded = [
+    ...mes_atual.dados,
+    ...Array(totalDias - diaAtual).fill(null)
+  ];
+  datasets.push({
+    label: `${mes_atual.label} (atual)`,
+    data: atualPadded,
+    borderColor: COR_ATUAL,
+    borderWidth: 3,
+    pointRadius: (ctx) => ctx.dataIndex === diaAtual - 1 ? 6 : 0,
+    pointBackgroundColor: COR_ATUAL,
+    tension: 0.4,
+    fill: false,
+    order: 1
+  });
+
+  const ctx = document.getElementById('mainChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            color: '#64748b',
+            font: { size: 11 },
+            boxWidth: 20,
+            filter: item => !['Cenário otimista','Cenário pessimista'].includes(item.text)
+          }
+        },
+        tooltip: {
+          backgroundColor: '#1a1d27',
+          borderColor: '#2e3250',
+          borderWidth: 1,
+          titleColor: '#e2e8f0',
+          bodyColor: '#94a3b8',
+          callbacks: {
+            label: ctx => {
+              if (ctx.parsed.y === null) return null;
+              return ` ${ctx.dataset.label}: ${Math.round(ctx.parsed.y).toLocaleString('pt-BR')} vendas`;
+            }
+          }
+        },
+        annotation: {
+          annotations: {
+            metaLine: {
+              type: 'line',
+              yMin: meta_mensal,
+              yMax: meta_mensal,
+              borderColor: 'rgba(255,255,255,0.15)',
+              borderWidth: 1,
+              borderDash: [4, 4],
+              label: {
+                display: true,
+                content: `Meta: ${meta_mensal.toLocaleString('pt-BR')}`,
+                color: 'rgba(255,255,255,0.4)',
+                font: { size: 10 },
+                position: 'end',
+                backgroundColor: 'transparent'
+              }
+            },
+            hojeLine: {
+              type: 'line',
+              xMin: diaAtual - 1,
+              xMax: diaAtual - 1,
+              borderColor: 'rgba(79,142,247,0.3)',
+              borderWidth: 1,
+              borderDash: [4, 4],
+              label: {
+                display: true,
+                content: 'Hoje',
+                color: 'rgba(79,142,247,0.7)',
+                font: { size: 10 },
+                position: 'start',
+                backgroundColor: 'transparent'
+              }
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(46,50,80,0.5)' },
+          ticks: { color: '#475569', font: { size: 10 }, maxTicksLimit: 10 }
+        },
+        y: {
+          grid: { color: 'rgba(46,50,80,0.5)' },
+          ticks: {
+            color: '#475569',
+            font: { size: 10 },
+            callback: v => v.toLocaleString('pt-BR')
+          }
+        }
+      }
+    }
+  });
+}
+
+init();
+</script>
+</body>
+</html>
